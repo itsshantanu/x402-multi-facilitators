@@ -1,6 +1,24 @@
-# x402 Merchant Agent with PayAI Facilitator
+# x402 Multi-Facilitator Merchant Demo
 
-A merchant server implementing the x402 payment protocol with PayAI facilitator for Base Sepolia network. This enables AI agents (client agents) to pay for API access using USDC micropayments.
+A merchant server implementing the **x402 payment protocol** with **multiple facilitators** for cross-chain micropayments. This demo showcases how AI agents can pay for API access using USDC across different blockchain networks.
+
+## 🌟 Features
+
+- **Multi-Facilitator Support** - Use different payment facilitators for different endpoints
+- **Cross-Chain Payments** - Support for EVM (Base) and Solana networks
+- **Pay-Per-Use APIs** - Monetize your APIs with micropayments
+- **Agent-to-Agent Commerce** - Built for AI agent interactions
+
+## Supported Facilitators
+
+| Facilitator | Network | Status | Documentation |
+|-------------|---------|--------|---------------|
+| [PayAI](https://facilitator.payai.network) | Base Sepolia | ✅ Tested | [Docs](https://docs.payai.network) |
+| [Heurist](https://facilitator.heurist.xyz) | Base (Mainnet) | ⚠️ Mainnet Only | [Docs](https://docs.heurist.ai/x402-products/facilitator) |
+| [Daydreams](https://facilitator.daydreams.systems) | Base, Solana | ⚠️ Mainnet Only | - |
+| [Dexter](https://dexter.cash/facilitator) | Solana | ⚠️ Solana Required | - |
+
+> **Note:** For testnet testing, PayAI is the recommended facilitator. Other facilitators may require mainnet deployment or specific network configurations.
 
 ## Overview
 
@@ -8,12 +26,34 @@ The x402 protocol enables pay-per-use API transactions between agents. When a cl
 
 ### How It Works
 
-1. **Client** requests a protected endpoint
-2. **Server** responds with HTTP 402 + payment requirements (price, network, asset)
-3. **Client** signs a payment authorization and retries with `X-PAYMENT` header
-4. **Server** verifies payment via PayAI facilitator
-5. **Server** returns the requested resource
-6. **Facilitator** settles payment on-chain
+```
+┌─────────────────┐                    ┌─────────────────┐
+│  Client Agent   │                    │  Merchant Server │
+└────────┬────────┘                    └────────┬─────────┘
+         │                                      │
+         │  1. Request protected resource       │
+         │─────────────────────────────────────>│
+         │                                      │
+         │  2. HTTP 402 + payment requirements  │
+         │<─────────────────────────────────────│
+         │                                      │
+         │  3. Sign payment + retry with        │
+         │     X-PAYMENT header                 │
+         │─────────────────────────────────────>│
+         │                                      │
+         │         ┌─────────────────┐          │
+         │         │   Facilitator   │          │
+         │         │ (PayAI/Heurist/ │          │
+         │         │ Daydreams/Dexter)│         │
+         │         └────────┬────────┘          │
+         │                  │                   │
+         │  4. Verify & settle payment          │
+         │                  │<─────────────────>│
+         │                  │                   │
+         │  5. Return resource + payment receipt│
+         │<─────────────────────────────────────│
+         │                                      │
+```
 
 ## Quick Start
 
@@ -34,17 +74,17 @@ cp .env.example .env
 Edit `.env`:
 
 ```env
-# PayAI Facilitator URL
-FACILITATOR_URL=https://facilitator.payai.network
-
-# Network - base-sepolia for testnet, base for mainnet
-NETWORK=base-sepolia
-
-# Your wallet address to receive payments (USDC)
-ADDRESS=0xYourWalletAddressHere
-
-# Server port
+# Server Configuration
 PORT=4021
+
+# Payment Addresses
+EVM_ADDRESS=0xYourEVMWalletAddress          # For Base Sepolia
+SOLANA_ADDRESS=YourSolanaWalletAddress      # For Solana
+
+# Client Configuration (for testing)
+MERCHANT_URL=http://localhost:4021
+EVM_PRIVATE_KEY=0xYourEVMPrivateKey         # DO NOT COMMIT!
+SOLANA_PRIVATE_KEY=YourSolanaPrivateKey     # DO NOT COMMIT!
 ```
 
 ### 3. Start the Server
@@ -62,36 +102,42 @@ The server will start on `http://localhost:4021`.
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/` | Server info and available endpoints |
-| GET | `/health` | Health check |
+| GET | `/health` | Health check with facilitator status |
 
 ### Protected Endpoints (Payment Required)
 
-| Method | Endpoint | Price (USDC) | Description |
-|--------|----------|--------------|-------------|
-| GET | `/api/weather` | $0.001 | Current weather data |
-| GET | `/api/analyze` | $0.01 | AI-powered data analysis |
-| GET | `/api/premium/content` | $0.005 | Premium content access |
-| POST | `/api/agent/data` | $0.002 | Agent-to-agent data exchange |
-| POST | `/api/compute` | $0.05 | Computational service |
+| Method | Endpoint | Price | Facilitator | Network |
+|--------|----------|-------|-------------|---------|
+| GET | `/api/weather` | $0.001 | PayAI | Base Sepolia |
+| POST | `/api/ai/image` | $0.02 | Heurist | Base Sepolia |
+| POST | `/api/agent/task` | $0.01 | Daydreams | Base Sepolia |
+| POST | `/api/compute` | $0.05 | Dexter | Solana |
 
-## Testing with Client
+## Testing
 
-### Configure Client
-
-Add to your `.env`:
-
-```env
-# Your private key for payments (DO NOT COMMIT!)
-PRIVATE_KEY=0x...your_private_key_here
-
-# Merchant URL
-MERCHANT_URL=http://localhost:4021
-```
-
-### Run Client Tests
+### Run the Test Client
 
 ```bash
 npm run dev:client
+```
+
+The client will test all endpoints and show payment flow for each facilitator.
+
+### Expected Results
+
+- **PayAI (Weather)** - ✅ Should work on Base Sepolia testnet
+- **Heurist (AI Image)** - ⚠️ May require mainnet (`base` instead of `base-sepolia`)
+- **Daydreams (Agent Task)** - ⚠️ May require mainnet or Solana
+- **Dexter (Compute)** - ⚠️ Requires Solana private key
+
+### Manual Testing with cURL
+
+```bash
+# Free endpoint
+curl http://localhost:4021/health
+
+# Paid endpoint (will return 402 without payment)
+curl http://localhost:4021/api/weather
 ```
 
 ## x402 Payment Flow
@@ -125,23 +171,15 @@ Clients submit payment via the `X-PAYMENT` header containing a base64-encoded pa
 
 Successful payments include an `X-PAYMENT-RESPONSE` header with transaction details.
 
-## Supported Networks
-
-- `base-sepolia` - Base Sepolia Testnet
-- `base` - Base Mainnet
-- `polygon-amoy` - Polygon Amoy Testnet
-- `polygon` - Polygon Mainnet
-- And more...
-
 ## Project Structure
 
 ```
 .
 ├── src/
-│   ├── index.ts      # Merchant server implementation
-│   └── client.ts     # Test client for payments
+│   ├── index.ts      # Multi-facilitator merchant server
+│   └── client.ts     # Test client for all facilitators
 ├── .env.example      # Environment configuration template
-├── .env              # Your local configuration
+├── .env              # Your local configuration (git ignored)
 ├── package.json
 ├── tsconfig.json
 └── README.md
@@ -152,15 +190,39 @@ Successful payments include an `X-PAYMENT-RESPONSE` header with transaction deta
 | Script | Description |
 |--------|-------------|
 | `npm run dev` | Start merchant server in development mode |
-| `npm run dev:client` | Run test client |
+| `npm run dev:client` | Run test client for all facilitators |
 | `npm run build` | Build for production |
 | `npm start` | Run production build |
 
+## Facilitator Details
+
+### PayAI
+- **URL:** `https://facilitator.payai.network`
+- **Networks:** Base Sepolia (testnet), Base (mainnet)
+- **Status:** ✅ Fully tested on testnet
+
+### Heurist
+- **URL:** `https://facilitator.heurist.xyz`
+- **Networks:** Base (mainnet), XLayer
+- **Status:** ⚠️ Docs mention Base Sepolia support, but API currently shows mainnet only
+- **Docs:** [https://docs.heurist.ai/x402-products/facilitator](https://docs.heurist.ai/x402-products/facilitator)
+
+### Daydreams
+- **URL:** `https://facilitator.daydreams.systems`
+- **Networks:** Base, Abstract, Polygon, Starknet, Solana
+- **Status:** ⚠️ No testnet support - mainnet or Solana required
+
+### Dexter
+- **URL:** `https://dexter.cash/facilitator`
+- **Networks:** Solana
+- **Status:** ⚠️ Requires Solana wallet and private key
+
 ## Resources
 
-- [PayAI Documentation](https://docs.payai.network)
 - [x402 Protocol Specification](https://www.x402.org)
-- [PayAI Facilitator](https://facilitator.payai.network)
+- [PayAI Documentation](https://docs.payai.network)
+- [Heurist Documentation](https://docs.heurist.ai/x402-products/facilitator)
+- [Coinbase x402 Quickstart](https://docs.cdp.coinbase.com/x402/quickstart-for-sellers)
 
 ## License
 

@@ -4,13 +4,17 @@ import { withPaymentInterceptor, createSigner } from "x402-axios";
 
 // Configuration
 const MERCHANT_URL = process.env.MERCHANT_URL || "http://localhost:4021";
-const PRIVATE_KEY = process.env.PRIVATE_KEY;
-const NETWORK = process.env.NETWORK || "base-sepolia";
+const EVM_PRIVATE_KEY = process.env.EVM_PRIVATE_KEY || process.env.PRIVATE_KEY;
+const SOLANA_PRIVATE_KEY = process.env.SOLANA_PRIVATE_KEY;
 
-if (!PRIVATE_KEY) {
-  console.error("Error: PRIVATE_KEY environment variable is required");
-  console.error("Please set your wallet private key in .env file");
+if (!EVM_PRIVATE_KEY) {
+  console.error("Error: EVM_PRIVATE_KEY (or PRIVATE_KEY) environment variable is required");
+  console.error("Please set your EVM wallet private key in .env file");
   process.exit(1);
+}
+
+if (!SOLANA_PRIVATE_KEY) {
+  console.warn("Warning: SOLANA_PRIVATE_KEY not set. Solana endpoints will not be tested with payment.");
 }
 
 // Helper function to decode x-payment-response header
@@ -25,27 +29,47 @@ function decodePaymentResponse(header: string | undefined): object | null {
 }
 
 async function testMerchant() {
-  // Create a signer from the private key
-  const signer = await createSigner(NETWORK, PRIVATE_KEY as `0x${string}`);
+  // Create signers for different networks
+  const evmSigner = await createSigner("base-sepolia", EVM_PRIVATE_KEY as `0x${string}`);
+  
+  // Create Solana signer if valid private key is provided
+  let solanaSigner = null;
+  if (SOLANA_PRIVATE_KEY && !SOLANA_PRIVATE_KEY.includes("Your")) {
+    try {
+      solanaSigner = await createSigner("solana", SOLANA_PRIVATE_KEY as `0x${string}`);
+    } catch (error: any) {
+      console.warn("⚠️  Failed to create Solana signer:", error.message);
+      console.warn("   Solana endpoints will be skipped.");
+    }
+  }
 
-  console.log("🔐 x402 Client Agent");
+  console.log("🔐 x402 Multi-Facilitator Client");
   console.log(`📍 Merchant URL: ${MERCHANT_URL}`);
-  console.log(`🌐 Network: ${NETWORK}`);
+  console.log(`🌐 Networks: Base Sepolia (EVM) + Solana`);
+  console.log(`💳 EVM Signer: Ready`);
+  console.log(`💳 Solana Signer: ${solanaSigner ? "Ready" : "Not configured"}`);
   console.log("");
 
-  // Wrap axios with x402 payment capabilities
-  const x402Axios = withPaymentInterceptor(axios.create(), signer);
+  // Create axios instances with payment interceptors
+  const evmAxios = withPaymentInterceptor(axios.create(), evmSigner);
+  const solanaAxios = solanaSigner 
+    ? withPaymentInterceptor(axios.create(), solanaSigner)
+    : null;
 
-  console.log("=".repeat(50));
-  console.log("Testing x402 Merchant Endpoints");
-  console.log("=".repeat(50));
+  console.log("=".repeat(60));
+  console.log("Testing x402 Multi-Facilitator Merchant Endpoints");
+  console.log("=".repeat(60));
   console.log("");
+
+  // ============================================
+  // FREE ENDPOINTS
+  // ============================================
 
   // Test 1: Check server health (free endpoint)
   console.log("📋 Test 1: Health Check (free)");
   try {
     const healthResponse = await axios.get(`${MERCHANT_URL}/health`);
-    console.log("✅ Health:", healthResponse.data);
+    console.log("✅ Health:", JSON.stringify(healthResponse.data, null, 2));
   } catch (error: any) {
     console.error("❌ Health check failed:", error.message);
   }
@@ -61,10 +85,20 @@ async function testMerchant() {
   }
   console.log("");
 
-  // Test 3: Access weather data (paid endpoint - $0.001)
-  console.log("📋 Test 3: Weather Data (paid - $0.001)");
+  // ============================================
+  // PAID ENDPOINTS - MULTI-FACILITATOR
+  // ============================================
+
+  console.log("-".repeat(60));
+  console.log("💳 PAID ENDPOINTS - EVM (Base Sepolia)");
+  console.log("-".repeat(60));
+  console.log("");
+
+  // Test 3: Weather Data - PayAI Facilitator (Base Sepolia)
+  console.log("📋 Test 3: Weather Data (PayAI/Base - $0.001)");
+  console.log("   Facilitator: https://facilitator.payai.network");
   try {
-    const weatherResponse = await x402Axios.get(`${MERCHANT_URL}/api/weather`);
+    const weatherResponse = await evmAxios.get(`${MERCHANT_URL}/api/weather`);
     console.log("✅ Weather Data:", JSON.stringify(weatherResponse.data, null, 2));
     const paymentInfo = decodePaymentResponse(
       weatherResponse.headers["x-payment-response"] as string | undefined
@@ -81,15 +115,18 @@ async function testMerchant() {
   }
   console.log("");
 
-  // Test 4: AI Analysis (paid endpoint - $0.01)
-  console.log("📋 Test 4: AI Analysis (paid - $0.01)");
+  // Test 4: AI Image Generation - Heurist Facilitator (Base Sepolia)
+  console.log("📋 Test 4: AI Image Generation (Heurist/Base - $0.02)");
+  console.log("   Facilitator: https://facilitator.heurist.xyz");
   try {
-    const analysisResponse = await x402Axios.get(
-      `${MERCHANT_URL}/api/analyze?q=blockchain+trends+2024`
-    );
-    console.log("✅ Analysis:", JSON.stringify(analysisResponse.data, null, 2));
+    const imageResponse = await evmAxios.post(`${MERCHANT_URL}/api/ai/image`, {
+      prompt: "A futuristic city with flying cars at sunset",
+      style: "cyberpunk",
+      size: "1024x1024",
+    });
+    console.log("✅ AI Image:", JSON.stringify(imageResponse.data, null, 2));
     const paymentInfo = decodePaymentResponse(
-      analysisResponse.headers["x-payment-response"] as string | undefined
+      imageResponse.headers["x-payment-response"] as string | undefined
     );
     if (paymentInfo) {
       console.log("💰 Payment Info:", paymentInfo);
@@ -98,47 +135,26 @@ async function testMerchant() {
     if (error.response?.status === 402) {
       console.log("⚠️ Payment required. Response:", error.response.data);
     } else {
-      console.error("❌ Analysis request failed:", error.message);
+      console.error("❌ AI Image request failed:", error.message);
     }
   }
   console.log("");
 
-  // Test 5: Premium Content (paid endpoint - $0.005)
-  console.log("📋 Test 5: Premium Content (paid - $0.005)");
+  // Test 5: Agent Task - Daydreams Facilitator (Base Sepolia)
+  console.log("📋 Test 5: Agent Task (Daydreams/Base - $0.01)");
+  console.log("   Facilitator: https://facilitator.daydreams.systems");
   try {
-    const premiumResponse = await x402Axios.get(
-      `${MERCHANT_URL}/api/premium/content`
-    );
-    console.log("✅ Premium Content:", JSON.stringify(premiumResponse.data, null, 2));
-    const paymentInfo = decodePaymentResponse(
-      premiumResponse.headers["x-payment-response"] as string | undefined
-    );
-    if (paymentInfo) {
-      console.log("💰 Payment Info:", paymentInfo);
-    }
-  } catch (error: any) {
-    if (error.response?.status === 402) {
-      console.log("⚠️ Payment required. Response:", error.response.data);
-    } else {
-      console.error("❌ Premium content request failed:", error.message);
-    }
-  }
-  console.log("");
-
-  // Test 6: Agent Data Exchange (paid endpoint - $0.002)
-  console.log("📋 Test 6: Agent Data Exchange (paid - $0.002)");
-  try {
-    const agentResponse = await x402Axios.post(`${MERCHANT_URL}/api/agent/data`, {
-      agentId: "client-agent-001",
-      requestType: "data_sync",
-      payload: {
-        action: "sync_state",
-        data: { key: "value" },
+    const taskResponse = await evmAxios.post(`${MERCHANT_URL}/api/agent/task`, {
+      taskType: "analysis",
+      instructions: "Analyze the current market trends for AI tokens",
+      context: {
+        timeframe: "24h",
+        focus: ["trading_volume", "price_action", "sentiment"],
       },
     });
-    console.log("✅ Agent Data:", JSON.stringify(agentResponse.data, null, 2));
+    console.log("✅ Agent Task:", JSON.stringify(taskResponse.data, null, 2));
     const paymentInfo = decodePaymentResponse(
-      agentResponse.headers["x-payment-response"] as string | undefined
+      taskResponse.headers["x-payment-response"] as string | undefined
     );
     if (paymentInfo) {
       console.log("💰 Payment Info:", paymentInfo);
@@ -147,41 +163,65 @@ async function testMerchant() {
     if (error.response?.status === 402) {
       console.log("⚠️ Payment required. Response:", error.response.data);
     } else {
-      console.error("❌ Agent data request failed:", error.message);
+      console.error("❌ Agent Task request failed:", error.message);
     }
   }
   console.log("");
 
-  // Test 7: Compute Service (paid endpoint - $0.05)
-  console.log("📋 Test 7: Compute Service (paid - $0.05)");
-  try {
-    const computeResponse = await x402Axios.post(`${MERCHANT_URL}/api/compute`, {
-      operation: "matrix_multiplication",
-      input: [[1, 2], [3, 4]],
-      parameters: {
-        precision: "high",
-        timeout: 5000,
-      },
-    });
-    console.log("✅ Compute Result:", JSON.stringify(computeResponse.data, null, 2));
-    const paymentInfo = decodePaymentResponse(
-      computeResponse.headers["x-payment-response"] as string | undefined
-    );
-    if (paymentInfo) {
-      console.log("💰 Payment Info:", paymentInfo);
-    }
-  } catch (error: any) {
-    if (error.response?.status === 402) {
-      console.log("⚠️ Payment required. Response:", error.response.data);
-    } else {
-      console.error("❌ Compute request failed:", error.message);
+  // ============================================
+  // PAID ENDPOINTS - SOLANA
+  // ============================================
+
+  console.log("-".repeat(60));
+  console.log("💳 PAID ENDPOINTS - Solana");
+  console.log("-".repeat(60));
+  console.log("");
+
+  // Test 6: Compute Service - Dexter Facilitator (Solana)
+  console.log("📋 Test 6: Compute Service (Dexter/Solana - $0.05)");
+  console.log("   Facilitator: https://dexter.cash/facilitator");
+  
+  if (!solanaAxios) {
+    console.log("⏭️  Skipping: SOLANA_PRIVATE_KEY not configured");
+    console.log("   Add SOLANA_PRIVATE_KEY to .env to test Solana endpoints");
+  } else {
+    try {
+      const computeResponse = await solanaAxios.post(`${MERCHANT_URL}/api/compute`, {
+        operation: "matrix_multiplication",
+        input: [[1, 2], [3, 4]],
+        parameters: {
+          precision: "high",
+          timeout: 5000,
+        },
+      });
+      console.log("✅ Compute Result:", JSON.stringify(computeResponse.data, null, 2));
+      const paymentInfo = decodePaymentResponse(
+        computeResponse.headers["x-payment-response"] as string | undefined
+      );
+      if (paymentInfo) {
+        console.log("💰 Payment Info:", paymentInfo);
+      }
+    } catch (error: any) {
+      if (error.response?.status === 402) {
+        console.log("⚠️ Payment required. Response:", error.response.data);
+      } else {
+        console.error("❌ Compute request failed:", error.message);
+      }
     }
   }
   console.log("");
 
-  console.log("=".repeat(50));
+  console.log("=".repeat(60));
   console.log("Testing Complete!");
-  console.log("=".repeat(50));
+  console.log("=".repeat(60));
+  console.log("");
+  console.log("Summary:");
+  console.log("  EVM (Base Sepolia):");
+  console.log("    - PayAI:     GET  /api/weather    - $0.001");
+  console.log("    - Heurist:   POST /api/ai/image   - $0.02");
+  console.log("    - Daydreams: POST /api/agent/task - $0.01");
+  console.log("  Solana:");
+  console.log("    - Dexter:    POST /api/compute    - $0.05");
 }
 
 // Run tests

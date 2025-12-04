@@ -7,9 +7,10 @@ import { paymentMiddleware, Network } from "x402-express";
 const PAYAI_FACILITATOR_URL = process.env.PAYAI_FACILITATOR_URL || "https://facilitator.payai.network";
 const DEXTER_FACILITATOR_URL = process.env.DEXTER_FACILITATOR_URL || "https://dexter.cash/facilitator";
 const HEURIST_FACILITATOR_URL = process.env.HEURIST_FACILITATOR_URL || "https://facilitator.heurist.xyz";
+const DAYDREAMS_FACILITATOR_URL = process.env.DAYDREAMS_FACILITATOR_URL || "https://facilitator.daydreams.systems";
 
 // Payment addresses for different networks
-const EVM_ADDRESS = process.env.EVM_ADDRESS; // For Base Sepolia (PayAI & Heurist)
+const EVM_ADDRESS = process.env.EVM_ADDRESS; // For Base Sepolia (PayAI, Heurist, Daydreams)
 const SOLANA_ADDRESS = process.env.SOLANA_ADDRESS; // For Solana (Dexter)
 
 const PORT = process.env.PORT || 4021;
@@ -28,6 +29,7 @@ console.log("🚀 Starting x402 Multi-Facilitator Merchant Server...");
 console.log(`\n📍 Facilitators:`);
 console.log(`   PayAI (Base Sepolia): ${PAYAI_FACILITATOR_URL}`);
 console.log(`   Heurist (Base Sepolia): ${HEURIST_FACILITATOR_URL}`);
+console.log(`   Daydreams (Base Sepolia): ${DAYDREAMS_FACILITATOR_URL}`);
 console.log(`   Dexter (Solana): ${DEXTER_FACILITATOR_URL}`);
 console.log(`\n💰 Payment Addresses:`);
 console.log(`   EVM (Base): ${EVM_ADDRESS}`);
@@ -81,6 +83,20 @@ const heuristRoutes = {
   },
 };
 
+// ============================================
+// Daydreams Facilitator Routes (Base Sepolia - EVM)
+// ============================================
+const daydreamsRoutes = {
+  // Agent task endpoint - $0.01 per request
+  "POST /api/agent/task": {
+    price: "$0.01",
+    network: "base-sepolia" as Network,
+    config: {
+      description: "Agent task execution (Daydreams/Base)",
+    },
+  },
+};
+
 // Apply PayAI payment middleware (Base Sepolia)
 app.use(
   paymentMiddleware(
@@ -114,6 +130,17 @@ app.use(
   )
 );
 
+// Apply Daydreams payment middleware (Base Sepolia)
+app.use(
+  paymentMiddleware(
+    EVM_ADDRESS as `0x${string}`,
+    daydreamsRoutes,
+    {
+      url: DAYDREAMS_FACILITATOR_URL as `${string}://${string}`,
+    }
+  )
+);
+
 // ============================================
 // Public Endpoints (no payment required)
 // ============================================
@@ -134,6 +161,11 @@ app.get("/health", (_req: Request, res: Response) => {
         network: "base-sepolia",
         address: EVM_ADDRESS,
       },
+      daydreams: {
+        url: DAYDREAMS_FACILITATOR_URL,
+        network: "base-sepolia",
+        address: EVM_ADDRESS,
+      },
       dexter: {
         url: DEXTER_FACILITATOR_URL,
         network: "solana",
@@ -147,7 +179,7 @@ app.get("/health", (_req: Request, res: Response) => {
 app.get("/", (_req: Request, res: Response) => {
   res.json({
     name: "x402 Multi-Facilitator Merchant Agent",
-    description: "A merchant server implementing x402 payment protocol with multiple facilitators (PayAI + Heurist + Dexter)",
+    description: "A merchant server implementing x402 payment protocol with multiple facilitators (PayAI + Heurist + Daydreams + Dexter)",
     facilitators: {
       payai: {
         url: PAYAI_FACILITATOR_URL,
@@ -156,6 +188,11 @@ app.get("/", (_req: Request, res: Response) => {
       },
       heurist: {
         url: HEURIST_FACILITATOR_URL,
+        network: "base-sepolia",
+        paymentAddress: EVM_ADDRESS,
+      },
+      daydreams: {
+        url: DAYDREAMS_FACILITATOR_URL,
         network: "base-sepolia",
         paymentAddress: EVM_ADDRESS,
       },
@@ -183,6 +220,13 @@ app.get("/", (_req: Request, res: Response) => {
             price: "$0.02",
             network: "base-sepolia",
             description: "AI image generation",
+          },
+        },
+        daydreams: {
+          "POST /api/agent/task": {
+            price: "$0.01",
+            network: "base-sepolia",
+            description: "Agent task execution",
           },
         },
         dexter: {
@@ -298,6 +342,43 @@ app.post("/api/ai/image", (req: Request, res: Response) => {
 });
 
 // ============================================
+// Daydreams Agent Endpoint (payment required)
+// ============================================
+
+// Agent task execution endpoint
+app.post("/api/agent/task", (req: Request, res: Response) => {
+  const { taskType, instructions, context } = req.body;
+
+  // Simulated agent task execution - in production, integrate with Daydreams
+  const taskResult = {
+    taskId: `task_${Date.now()}`,
+    taskType: taskType || "general",
+    instructions: instructions || "Execute default task",
+    context: context || {},
+    result: {
+      status: "completed",
+      output: {
+        response: "Task executed successfully by Daydreams agent",
+        actions: ["analyzed_input", "processed_request", "generated_response"],
+        confidence: 0.92,
+      },
+      metadata: {
+        agentVersion: "daydreams-v1",
+        executionTime: "234ms",
+        tokensUsed: 150,
+      },
+    },
+    completedAt: new Date().toISOString(),
+  };
+
+  res.json({
+    success: true,
+    data: taskResult,
+    message: "Agent task completed successfully",
+  });
+});
+
+// ============================================
 // Error handling
 // ============================================
 
@@ -328,14 +409,16 @@ app.listen(PORT, () => {
   console.log(`📡 Server: http://localhost:${PORT}`);
   console.log(`\n📋 Available endpoints:`);
   console.log(`   Public:`);
-  console.log(`   - GET  /           - Server info`);
-  console.log(`   - GET  /health     - Health check`);
+  console.log(`   - GET  /              - Server info`);
+  console.log(`   - GET  /health        - Health check`);
   console.log(`\n   Paid:`);
-  console.log(`   - GET  /api/weather   - $0.001 - Weather data (PayAI/Base)`);
-  console.log(`   - POST /api/ai/image  - $0.02  - AI image gen (Heurist/Base)`);
-  console.log(`   - POST /api/compute   - $0.05  - Compute (Dexter/Solana)`);
+  console.log(`   - GET  /api/weather     - $0.001 - Weather (PayAI/Base)`);
+  console.log(`   - POST /api/ai/image    - $0.02  - AI image (Heurist/Base)`);
+  console.log(`   - POST /api/agent/task  - $0.01  - Agent task (Daydreams/Base)`);
+  console.log(`   - POST /api/compute     - $0.05  - Compute (Dexter/Solana)`);
   console.log(`\n🔐 Facilitators:`);
-  console.log(`   - PayAI:   ${PAYAI_FACILITATOR_URL}`);
-  console.log(`   - Heurist: ${HEURIST_FACILITATOR_URL}`);
-  console.log(`   - Dexter:  ${DEXTER_FACILITATOR_URL}`);
+  console.log(`   - PayAI:     ${PAYAI_FACILITATOR_URL}`);
+  console.log(`   - Heurist:   ${HEURIST_FACILITATOR_URL}`);
+  console.log(`   - Daydreams: ${DAYDREAMS_FACILITATOR_URL}`);
+  console.log(`   - Dexter:    ${DEXTER_FACILITATOR_URL}`);
 });

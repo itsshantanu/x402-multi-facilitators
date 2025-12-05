@@ -168,6 +168,27 @@ async function testMerchant() {
   }
   console.log("");
 
+  // Test 6: Premium Data - Coinbase CDP Facilitator (Base Sepolia)
+  console.log("📋 Test 6: Premium Data (Coinbase CDP/Base - $0.005)");
+  console.log("   Facilitator: @coinbase/x402 package");
+  try {
+    const dataResponse = await evmAxios.get(`${MERCHANT_URL}/api/data`);
+    console.log("✅ Premium Data:", JSON.stringify(dataResponse.data, null, 2));
+    const paymentInfo = decodePaymentResponse(
+      dataResponse.headers["x-payment-response"] as string | undefined
+    );
+    if (paymentInfo) {
+      console.log("💰 Payment Info:", paymentInfo);
+    }
+  } catch (error: any) {
+    if (error.response?.status === 402) {
+      console.log("⚠️ Payment required. Response:", error.response.data);
+    } else {
+      console.error("❌ Premium Data request failed:", error.message);
+    }
+  }
+  console.log("");
+
   // ============================================
   // PAID ENDPOINTS - SOLANA
   // ============================================
@@ -177,8 +198,8 @@ async function testMerchant() {
   console.log("-".repeat(60));
   console.log("");
 
-  // Test 6: Compute Service - Dexter Facilitator (Solana)
-  console.log("📋 Test 6: Compute Service (Dexter/Solana - $0.05)");
+  // Test 7: Compute Service - Dexter Facilitator (Solana)
+  console.log("📋 Test 7: Compute Service (Dexter/Solana - $0.05)");
   console.log("   Facilitator: https://dexter.cash/facilitator");
   
   if (!solanaAxios) {
@@ -220,6 +241,7 @@ async function testMerchant() {
   console.log("    - PayAI:     GET  /api/weather    - $0.001");
   console.log("    - Heurist:   POST /api/ai/image   - $0.02");
   console.log("    - Daydreams: POST /api/agent/task - $0.01");
+  console.log("    - Coinbase:  GET  /api/data       - $0.005");
   console.log("  Solana:");
   console.log("    - Dexter:    POST /api/compute    - $0.05");
 }

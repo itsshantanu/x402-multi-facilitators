@@ -14,11 +14,12 @@ A merchant server implementing the **x402 payment protocol** with **multiple fac
 | Facilitator | Network | Status | Documentation |
 |-------------|---------|--------|---------------|
 | [PayAI](https://facilitator.payai.network) | Base Sepolia | ✅ Tested | [Docs](https://docs.payai.network) |
+| [Coinbase CDP](https://docs.cdp.coinbase.com/x402) | Base Sepolia, Base | ✅ Production Ready | [Docs](https://docs.cdp.coinbase.com/x402) |
 | [Heurist](https://facilitator.heurist.xyz) | Base (Mainnet) | ⚠️ Mainnet Only | [Docs](https://docs.heurist.ai/x402-products/facilitator) |
 | [Daydreams](https://facilitator.daydreams.systems) | Base, Solana | ⚠️ Mainnet Only | - |
 | [Dexter](https://dexter.cash/facilitator) | Solana | ⚠️ Solana Required | - |
 
-> **Note:** For testnet testing, PayAI is the recommended facilitator. Other facilitators may require mainnet deployment or specific network configurations.
+> **Note:** For testnet testing, PayAI and Coinbase are the recommended facilitators. Other facilitators may require mainnet deployment or specific network configurations.
 
 ## Overview
 
@@ -43,8 +44,9 @@ The x402 protocol enables pay-per-use API transactions between agents. When a cl
          │                                      │
          │         ┌─────────────────┐          │
          │         │   Facilitator   │          │
-         │         │ (PayAI/Heurist/ │          │
-         │         │ Daydreams/Dexter)│         │
+         │         │(PayAI/Coinbase/ │          │
+         │         │Heurist/Daydreams│          │
+         │         │    /Dexter)     │          │
          │         └────────┬────────┘          │
          │                  │                   │
          │  4. Verify & settle payment          │
@@ -111,6 +113,7 @@ The server will start on `http://localhost:4021`.
 | GET | `/api/weather` | $0.001 | PayAI | Base Sepolia |
 | POST | `/api/ai/image` | $0.02 | Heurist | Base Sepolia |
 | POST | `/api/agent/task` | $0.01 | Daydreams | Base Sepolia |
+| GET | `/api/data` | $0.005 | Coinbase | Base Sepolia |
 | POST | `/api/compute` | $0.05 | Dexter | Solana |
 
 ## Testing
@@ -126,6 +129,7 @@ The client will test all endpoints and show payment flow for each facilitator.
 ### Expected Results
 
 - **PayAI (Weather)** - ✅ Should work on Base Sepolia testnet
+- **Coinbase (Data)** - ✅ Should work on Base Sepolia testnet
 - **Heurist (AI Image)** - ⚠️ May require mainnet (`base` instead of `base-sepolia`)
 - **Daydreams (Agent Task)** - ⚠️ May require mainnet or Solana
 - **Dexter (Compute)** - ⚠️ Requires Solana private key
@@ -200,6 +204,14 @@ Successful payments include an `X-PAYMENT-RESPONSE` header with transaction deta
 - **URL:** `https://facilitator.payai.network`
 - **Networks:** Base Sepolia (testnet), Base (mainnet)
 - **Status:** ✅ Fully tested on testnet
+
+### Coinbase CDP
+- **Package:** `@coinbase/x402`
+- **Networks:** Base Sepolia (testnet), Base (mainnet), Solana, Solana Devnet
+- **Status:** ✅ Official Coinbase Developer Platform facilitator (production-ready)
+- **API Key:** Required (`CDP_API_KEY_ID` and `CDP_API_KEY_SECRET` env vars)
+- **Features:** KYT/OFAC compliance, fee-free USDC, x402 Bazaar discovery
+- **Docs:** [https://docs.cdp.coinbase.com/x402](https://docs.cdp.coinbase.com/x402)
 
 ### Heurist
 - **URL:** `https://facilitator.heurist.xyz`

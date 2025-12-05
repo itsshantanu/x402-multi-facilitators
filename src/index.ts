@@ -2,6 +2,7 @@ import "dotenv/config";
 import express, { Request, Response } from "express";
 import cors from "cors";
 import { paymentMiddleware, Network } from "x402-express";
+import { facilitator as coinbaseFacilitator } from "@coinbase/x402";
 
 // Validate required environment variables
 const PAYAI_FACILITATOR_URL = process.env.PAYAI_FACILITATOR_URL || "https://facilitator.payai.network";
@@ -30,6 +31,7 @@ console.log(`\n📍 Facilitators:`);
 console.log(`   PayAI (Base Sepolia): ${PAYAI_FACILITATOR_URL}`);
 console.log(`   Heurist (Base Sepolia): ${HEURIST_FACILITATOR_URL}`);
 console.log(`   Daydreams (Base Sepolia): ${DAYDREAMS_FACILITATOR_URL}`);
+console.log(`   Coinbase CDP (Base Sepolia): @coinbase/x402 package`);
 console.log(`   Dexter (Solana): ${DEXTER_FACILITATOR_URL}`);
 console.log(`\n💰 Payment Addresses:`);
 console.log(`   EVM (Base): ${EVM_ADDRESS}`);
@@ -97,6 +99,20 @@ const daydreamsRoutes = {
   },
 };
 
+// ============================================
+// Coinbase Facilitator Routes (Base Sepolia - EVM)
+// ============================================
+const coinbaseRoutes = {
+  // Data service endpoint - $0.005 per request
+  "GET /api/data": {
+    price: "$0.005",
+    network: "base-sepolia" as Network,
+    config: {
+      description: "Premium data service (Coinbase/Base)",
+    },
+  },
+};
+
 // Apply PayAI payment middleware (Base Sepolia)
 app.use(
   paymentMiddleware(
@@ -141,6 +157,16 @@ app.use(
   )
 );
 
+// Apply Coinbase CDP payment middleware (Base Sepolia)
+// Uses @coinbase/x402 package - requires CDP_API_KEY_ID and CDP_API_KEY_SECRET env vars for mainnet
+app.use(
+  paymentMiddleware(
+    EVM_ADDRESS as `0x${string}`,
+    coinbaseRoutes,
+    coinbaseFacilitator
+  )
+);
+
 // ============================================
 // Public Endpoints (no payment required)
 // ============================================
@@ -166,6 +192,11 @@ app.get("/health", (_req: Request, res: Response) => {
         network: "base-sepolia",
         address: EVM_ADDRESS,
       },
+      coinbase: {
+        package: "@coinbase/x402",
+        network: "base-sepolia",
+        address: EVM_ADDRESS,
+      },
       dexter: {
         url: DEXTER_FACILITATOR_URL,
         network: "solana",
@@ -179,7 +210,7 @@ app.get("/health", (_req: Request, res: Response) => {
 app.get("/", (_req: Request, res: Response) => {
   res.json({
     name: "x402 Multi-Facilitator Merchant Agent",
-    description: "A merchant server implementing x402 payment protocol with multiple facilitators (PayAI + Heurist + Daydreams + Dexter)",
+    description: "A merchant server implementing x402 payment protocol with multiple facilitators (PayAI + Heurist + Daydreams + Coinbase + Dexter)",
     facilitators: {
       payai: {
         url: PAYAI_FACILITATOR_URL,
@@ -193,6 +224,11 @@ app.get("/", (_req: Request, res: Response) => {
       },
       daydreams: {
         url: DAYDREAMS_FACILITATOR_URL,
+        network: "base-sepolia",
+        paymentAddress: EVM_ADDRESS,
+      },
+      coinbase: {
+        package: "@coinbase/x402",
         network: "base-sepolia",
         paymentAddress: EVM_ADDRESS,
       },
@@ -227,6 +263,13 @@ app.get("/", (_req: Request, res: Response) => {
             price: "$0.01",
             network: "base-sepolia",
             description: "Agent task execution",
+          },
+        },
+        coinbase: {
+          "GET /api/data": {
+            price: "$0.005",
+            network: "base-sepolia",
+            description: "Premium data service",
           },
         },
         dexter: {
@@ -342,6 +385,49 @@ app.post("/api/ai/image", (req: Request, res: Response) => {
 });
 
 // ============================================
+// Coinbase Data Endpoint (payment required)
+// ============================================
+
+// Premium data service endpoint
+app.get("/api/data", (_req: Request, res: Response) => {
+  // Simulated premium data - in production, integrate with real data sources
+  const dataResult = {
+    requestId: `data_${Date.now()}`,
+    category: "market_intelligence",
+    data: {
+      cryptoMarket: {
+        totalMarketCap: "$2.1T",
+        btcDominance: "52.3%",
+        ethDominance: "17.8%",
+        trending: ["BTC", "ETH", "SOL", "BASE"],
+      },
+      defiMetrics: {
+        totalTvl: "$89.5B",
+        topProtocols: ["Lido", "Aave", "MakerDAO", "Uniswap"],
+        avgApy: "4.2%",
+      },
+      sentiment: {
+        overall: "bullish",
+        fearGreedIndex: 67,
+        socialVolume: "high",
+      },
+    },
+    metadata: {
+      source: "coinbase-aggregator",
+      freshness: "real-time",
+      confidence: 0.95,
+    },
+    generatedAt: new Date().toISOString(),
+  };
+
+  res.json({
+    success: true,
+    data: dataResult,
+    message: "Premium data retrieved successfully",
+  });
+});
+
+// ============================================
 // Daydreams Agent Endpoint (payment required)
 // ============================================
 
@@ -415,10 +501,12 @@ app.listen(PORT, () => {
   console.log(`   - GET  /api/weather     - $0.001 - Weather (PayAI/Base)`);
   console.log(`   - POST /api/ai/image    - $0.02  - AI image (Heurist/Base)`);
   console.log(`   - POST /api/agent/task  - $0.01  - Agent task (Daydreams/Base)`);
+  console.log(`   - GET  /api/data        - $0.005 - Premium data (Coinbase/Base)`);
   console.log(`   - POST /api/compute     - $0.05  - Compute (Dexter/Solana)`);
   console.log(`\n🔐 Facilitators:`);
   console.log(`   - PayAI:     ${PAYAI_FACILITATOR_URL}`);
   console.log(`   - Heurist:   ${HEURIST_FACILITATOR_URL}`);
   console.log(`   - Daydreams: ${DAYDREAMS_FACILITATOR_URL}`);
+  console.log(`   - Coinbase:  @coinbase/x402 (CDP)`);
   console.log(`   - Dexter:    ${DEXTER_FACILITATOR_URL}`);
 });
